@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Review income, expenses, and cash flow from a CSV on your device.">
+  <title>Spendbay</title>
+  <script>
+    try {
+      const theme = localStorage.getItem('finance-theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="tracker.css">
+  <script src="csv.js" defer></script>
+  <script src="tracker.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <nav class="top" aria-label="Tracker navigation">
+        <button class="link-button" id="theme" type="button" hidden></button>
+      </nav>
+      <h1>Spendbay</h1>
+      <p>Your income, expenses, and cash flow. Saved on this device.</p>
+      <div class="actions">
+        <button class="specular" id="entry-open" type="button" aria-haspopup="dialog">Add transaction</button>
+        <label class="upload">Upload CSV<input id="csv" type="file" accept=".csv,text/csv"></label>
+        <label class="format">Import mode <select id="import-mode"><option value="replace">Replace ledger</option><option value="append">Add transactions</option></select></label>
+        <button class="link-button" id="export" type="button" disabled>Export CSV</button>
+      </div>
+      <p class="format">Detects signed amounts, debit and credit columns, or amount plus transaction type. One currency per ledger.</p>
+      <div class="sample-files" aria-label="Load student CSV samples">
+        <button type="button" class="link-button" data-sample="sample.csv">Business owner</button>
+        <button type="button" class="link-button" data-sample="sample-bank.csv">College student</button>
+        <button type="button" class="link-button" data-sample="sample-wallet.csv">Salaried employee</button>
+        <button type="button" class="link-button" data-sample="sample-investor.csv">Investor losses</button>
+      </div>
+      <p id="import-progress" class="thought-line" role="status" hidden></p>
+      <p id="status" role="status"></p>
+    </header>
+
+    <dialog id="entry-dialog" class="entry-dialog" aria-labelledby="entry-title">
+      <h2 id="entry-title">Add a transaction</h2>
+      <form id="entry-form">
+        <label>Date<input id="entry-date" type="date" required></label>
+        <label>Type<select class="glide-select" id="entry-type"><option value="expense">Expense</option><option value="income">Income</option></select></label>
+        <label>Currency code<input id="entry-currency" maxlength="3" required></label>
+        <label>Amount<input id="entry-amount" type="number" min="0.01" max="9999999999.99" step="0.01" required inputmode="decimal"></label>
+        <label>Description<input id="entry-description" maxlength="200" required placeholder="What was it for?"></label>
+        <label>Category<select class="glide-select" id="entry-category" required></select></label>
+        <label id="custom-category-field" hidden>Custom category<input id="custom-category" maxlength="60"></label>
+        <label>Subcategory<select class="glide-select" id="entry-subcategory"></select></label>
+        <p id="entry-error" class="entry-error" role="alert" hidden></p>
+        <div class="actions">
+          <button class="specular" id="entry-save" type="submit">Add transaction</button>
+          <button class="link-button" id="entry-cancel" type="button" >Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="import-dialog" class="entry-dialog import-dialog" aria-labelledby="import-title">
+      <h2 id="import-title">Review CSV import</h2>
+      <p id="import-file" class="format"></p>
+      <form id="import-form">
+        <div id="import-mapping" class="import-mapping"></div>
+        <p id="import-feedback" class="format" role="status"></p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Transaction preview">
+          <table>
+            <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Category</th><th scope="col">Amount</th></tr></thead>
+            <tbody id="import-rows"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <label><input type="checkbox" id="remember-mapping"> Remember these columns</label>
+          <button type="submit" class="specular" id="confirm-import" disabled>Import transactions</button>
+          <button type="button" class="link-button" id="cancel-import">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section id="empty-state" class="section-rule" aria-labelledby="empty-title">
+      <h2 id="empty-title">Add transactions to see your finances</h2>
+      <p>Add a transaction above, upload a CSV, or load a student sample.</p>
+    </section>
+
+    <section id="dashboard" hidden aria-label="Finance overview">
+      <div class="filters">
+        <h2>Overview</h2>
+        <label>Month <select id="month"></select></label>
+      </div>
+      <dl class="metrics bento">
+        <div><dt>Income</dt><dd id="income"></dd></div>
+        <div><dt>Expenses</dt><dd id="expenses"></dd></div>
+        <div><dt>Net cash flow</dt><dd id="net"></dd></div>
+      </dl>
+      <dl class="insights">
+        <div><dt>Net cash-flow margin</dt><dd id="margin"></dd></div>
+        <div><dt>Transactions</dt><dd id="transaction-count"></dd></div>
+        <div><dt>Average expense</dt><dd id="average-expense"></dd></div>
+        <div><dt>Largest expense</dt><dd id="largest-expense"></dd></div>
+        <div><dt>Top spending category</dt><dd id="top-category"></dd></div>
+      </dl>
+      <div class="breakdowns">
+        <section class="section-rule"><h2>Monthly cash flow</h2><p class="legend"><span>Income</span><span>Expenses</span></p><div class="trend-scroll"><ul id="trend" class="trend"></ul></div></section>
+        <section class="section-rule"><h2>Spending by category</h2><div id="spending-wheel" class="spending-wheel" aria-hidden="true"></div><ul id="categories" class="bars"></ul></section>
+      </div>
+      <section class="section-rule">
+        <div class="filters"><h2>Transactions</h2><label>Search <input id="search" type="search" placeholder="Description or category"></label></div>
+        <div id="category-filters" class="rubber-segment" role="group" aria-label="Filter transactions by category"></div>
+        <p id="result-count" class="format"></p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Transactions table">
+          <table>
+            <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Category</th><th scope="col">Amount</th><th scope="col">Actions</th></tr></thead>
+            <tbody id="transactions"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+    <footer class="section-rule">
+      <p>All transaction data is processed on your device and saved in this browser. Your entries return when you reopen the app in the same browser and location.</p>
+      <p>Clearing browser data removes your saved ledger. Export a CSV to keep a backup.</p>
+      <p id="save-state" role="status"></p>
+      <button class="link-button" id="clear-ledger" type="button" disabled>Clear saved ledger</button>
+    </footer>
+  </main>
+</body>
+</html>
