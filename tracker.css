@@ -184,3 +184,12 @@ button:disabled { opacity: .45; cursor: default; }
 .import-mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .55rem; margin-block: .8rem; }
 .import-mapping label { display: grid; color: var(--muted); font-size: .875rem; }
 .import-mapping select { width: 100%; min-width: 0; }
+
+.lattice-status { display: flex; align-items: center; gap: .65rem; }
+.lattice-status[hidden] { display: none; }
+.lattice { display: inline-grid; grid-template-columns: repeat(3, 4px); gap: 2px; color: var(--accent); }
+.lattice i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .38; }
+@media (prefers-reduced-motion: no-preference) {
+  .lattice i { animation: lattice-orbit .81s linear infinite; animation-delay: calc(var(--step) * 90ms - 810ms); }
+  @keyframes lattice-orbit { 0%, 14% { opacity: 1; } 36%, 100% { opacity: .18; } }
+}

@@ -223,14 +223,14 @@ async function load(read, name, sample = false, layout) {
   activeImport = version;
   const progress = byId('import-progress');
   progress.hidden = false;
-  progress.textContent = 'Reading CSV…';
+  byId('import-phase').textContent = 'Reading CSV…';
   const status = byId('status');
   status.removeAttribute('data-error');
   try {
     const source = await read();
     if (version !== loadVersion) return;
-    progress.textContent = 'Matching columns and checking transactions…';
-    await new Promise(resolve => setTimeout(resolve, reducedMotion.matches ? 0 : 240));
+    byId('import-phase').textContent = 'Matching columns and checking transactions…';
+    await new Promise(resolve => setTimeout(resolve, reducedMotion.matches ? 0 : 650));
     if (version !== loadVersion) return;
     const imported = parseCsv(source, sample ? 'INR' : ledgerCurrency, layout);
     const rows = imported.transactions;
@@ -552,9 +552,14 @@ function readMappings() {
 
 async function previewUpload(file) {
   const version = ++loadVersion;
+  activeImport = version;
+  const progress = byId('import-progress');
+  progress.hidden = false;
+  byId('import-phase').textContent = 'Preparing CSV preview…';
   const status = byId('status');
   try {
     const source = await file.text();
+    await new Promise(resolve => setTimeout(resolve, reducedMotion.matches ? 0 : 650));
     if (version !== loadVersion) return;
     const layout = inspectCsv(source, true);
     const signature = JSON.stringify(layout.headings.map(heading => heading.trim().toLowerCase()));
@@ -589,6 +594,8 @@ async function previewUpload(file) {
     if (version !== loadVersion) return;
     status.setAttribute('data-error', '');
     status.textContent = error.message;
+  } finally {
+    if (activeImport === version) progress.hidden = true;
   }
 }
 
