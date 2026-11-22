@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Review income, expenses, and cash flow from a CSV on your device.">
   <title>Spendbay</title>
-  <link rel="icon" href="brand-mark.png" type="image/png">
+  <link rel="icon" href="brand-mark.png?v=2" type="image/png">
   <script>
     try {
       const theme = localStorage.getItem('finance-theme');
@@ -15,19 +15,6 @@
   <link rel="stylesheet" href="tracker.css">
   <script src="csv.js" defer></script>
   <script src="tracker.js" defer></script>
-  <style>
-    .project-brand-heading { display: flex; align-items: center; gap: .35em; }
-    .project-brand-mark {
-      display: inline-block;
-      flex: none;
-      width: 1em;
-      height: 1em;
-      background: var(--accent);
-      -webkit-mask: url("brand-mark.png") center / contain no-repeat;
-      mask: url("brand-mark.png") center / contain no-repeat;
-    }
-    @media (forced-colors: active) { .project-brand-mark { background: CanvasText; forced-color-adjust: none; } }
-  </style>
 </head>
 <body>
   <main>
@@ -35,7 +22,7 @@
       <nav class="top" aria-label="Tracker navigation">
         <button class="link-button" id="theme" type="button" hidden></button>
       </nav>
-      <h1 class="project-brand-heading"><span class="project-brand-mark" aria-hidden="true"></span>Spendbay</h1>
+      <h1>Spendbay</h1>
       <p>Your income, expenses, and cash flow. Saved on this device.</p>
       <div class="actions">
         <button class="specular" id="entry-open" type="button" aria-haspopup="dialog">Add transaction</button>
