@@ -1,3 +1,4 @@
+const offerUndo = createFuseUndo();
 const samples = {
   "sample.csv": {
     "csv": "date,description,category,amount,currency\n2026-09-02,Online orders payout,Sales,42850,INR\n2026-09-04,Packaging supplier,Operations,-3715,INR\n2026-09-18,Product photography,Marketing,-5400,INR\n2026-10-02,Wholesale order,Sales,29300,INR\n2026-10-09,Inventory restock,Inventory,-18540,INR\n2026-10-21,Courier invoices,Shipping,-2690,INR\n2026-11-05,Online orders payout,Sales,56200,INR\n2026-11-09,Workspace rent,Housing,-9500,INR\n"
@@ -393,8 +394,9 @@ function persistLedger() {
   }
 }
 
-function commitLedger(rows, currency = ledgerCurrency, sample = false) {
+function commitLedger(rows, currency = ledgerCurrency, sample = false, recordUndo = true) {
   const checked = validateLedger(rows.map(row => ({...row})));
+  const previous = {rows: transactions.map(row => ({...row})), currency: ledgerCurrency, sample: isSampleLedger};
   ++loadVersion;
   transactions = checked;
   isSampleLedger = sample;
@@ -403,6 +405,10 @@ function commitLedger(rows, currency = ledgerCurrency, sample = false) {
   persistLedger();
   resetEntry();
   refreshLedger();
+  if (recordUndo) offerUndo(() => {
+    commitLedger(previous.rows, previous.currency, previous.sample, false);
+    byId('status').textContent = 'Change undone.';
+  });
 }
 
 function refreshLedger() {
