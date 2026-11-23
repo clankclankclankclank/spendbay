@@ -1,4 +1,22 @@
 const offerUndo = createFuseUndo();
+const merchantKey = 'spendbay-merchant-rules-v1';
+function validRules(rules) {
+  return Array.isArray(rules) && rules.every(rule => typeof rule?.merchant === 'string' &&
+    rule.merchant.trim() && typeof rule.category === 'string' && rule.category.trim());
+}
+let merchantRules = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(merchantKey));
+  if (validRules(saved)) merchantRules = saved;
+} catch {}
+function categorize(row) {
+  const description = row.description.toLowerCase();
+  const rule = merchantRules.reduce((best, candidate) =>
+    description.includes(candidate.merchant.toLowerCase()) &&
+    (!best || candidate.merchant.length > best.merchant.length) ? candidate : best, null);
+  return rule ? {...row, category: rule.category, subcategory: ''} : row;
+}
+
 const samples = {
   "sample.csv": {
     "csv": "date,description,category,amount,currency\n2026-09-02,Online orders payout,Sales,42850,INR\n2026-09-04,Packaging supplier,Operations,-3715,INR\n2026-09-18,Product photography,Marketing,-5400,INR\n2026-10-02,Wholesale order,Sales,29300,INR\n2026-10-09,Inventory restock,Inventory,-18540,INR\n2026-10-21,Courier invoices,Shipping,-2690,INR\n2026-11-05,Online orders payout,Sales,56200,INR\n2026-11-09,Workspace rent,Housing,-9500,INR\n"
@@ -305,7 +323,7 @@ async function load(read, sample = false, layout) {
     await new Promise(resolve => setTimeout(resolve, reducedMotion.matches ? 0 : 650));
     if (version !== loadVersion) return;
     const imported = parseCsv(source, sample ? 'INR' : ledgerCurrency, layout);
-    const rows = imported.transactions;
+    const rows = sample ? imported.transactions : imported.transactions.map(categorize);
     const differentCurrency = transactions.length > 0 && imported.currency !== ledgerCurrency;
     const replace = sample || byId('import-mode').value === 'replace';
     if (differentCurrency && !replace) throw new Error('This CSV uses ' + imported.currency + '. Choose Replace ledger or use a CSV in ' + ledgerCurrency + '.');
@@ -478,7 +496,7 @@ byId('entry-form').addEventListener('submit', event => {
       amount: byId('entry-type').value === 'expense' ? -magnitude : magnitude
     };
     const editing = editingId !== null;
-    commitLedger(editing ? transactions.map(row => row.id === editingId ? entry : row) : [...transactions, entry], currency);
+    commitLedger(editing ? transactions.map(row => row.id === editingId ? entry : row) : [...transactions, categorize(entry)], currency);
     status.removeAttribute('data-error');
     status.textContent = editing ? 'Transaction updated.' : 'Transaction added.';
     byId('entry-dialog').close();
@@ -700,7 +718,7 @@ function renderImportPreview() {
       if (seen.has(key) || (append && existing.has(key))) duplicates++;
       seen.add(key);
     }
-    for (const row of result.transactions.slice(0, 5)) {
+    for (const row of result.transactions.slice(0, 5).map(categorize)) {
       const line = table.insertRow();
       for (const value of [row.date, row.description, row.category, previewMoney.format(row.amount / divisor)]) {
         line.insertCell().textContent = value;
@@ -730,3 +748,98 @@ byId('import-form').addEventListener('submit', event => {
 });
 byId('cancel-import').addEventListener('click', () => byId('import-dialog').close());
 byId('import-dialog').addEventListener('close', () => { pendingImport = null; });
+
+const backupStatus = byId('backup-status');
+function saveRules() {
+  localStorage.setItem(merchantKey, JSON.stringify(merchantRules));
+}
+function renderRules() {
+  byId('merchant-rules').replaceChildren(...merchantRules.map((rule, index) => {
+    const item = document.createElement('li');
+    item.textContent = rule.merchant + ' → ' + rule.category + ' ';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Remove';
+    remove.onclick = () => {
+      merchantRules.splice(index, 1);
+      try { saveRules(); } catch { backupStatus.textContent = 'Rules could not be saved to this browser.'; }
+      renderRules();
+    };
+    item.append(remove);
+    return item;
+  }));
+}
+renderRules();
+byId('rule-form').onsubmit = event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const merchant = form.elements.merchant.value.trim().toLowerCase();
+  const category = form.elements.category.value.trim();
+  if (!merchant || !category) return;
+  merchantRules = [...merchantRules.filter(rule => rule.merchant !== merchant), {merchant, category}];
+  try { saveRules(); } catch { backupStatus.textContent = 'Rules could not be saved to this browser.'; }
+  renderRules();
+  form.reset();
+};
+
+async function backupKey(secret, salt) {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:600000, hash:'SHA-256'}, material,
+    {name:'AES-GCM', length:256}, false, ['encrypt', 'decrypt']);
+}
+const encodeBackup = bytes => btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
+const decodeBackup = text => Uint8Array.from(atob(text), char => char.charCodeAt(0));
+byId('backup-form').onsubmit = async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const secret = form.elements.secret.value;
+  const buttons = form.querySelectorAll('button');
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    if (event.submitter?.value === 'save') {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const data = new TextEncoder().encode(JSON.stringify({transactions, currency:ledgerCurrency, merchantRules, isSampleLedger}));
+      const encrypted = await crypto.subtle.encrypt({name:'AES-GCM', iv}, await backupKey(secret, salt), data);
+      const blob = new Blob([JSON.stringify({version:1, salt:encodeBackup(salt), iv:encodeBackup(iv),
+        data:encodeBackup(new Uint8Array(encrypted))})], {type:'application/json'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'spendbay-backup.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      backupStatus.textContent = 'Encrypted backup downloaded. Keep your passphrase to restore it.';
+    } else {
+      const file = form.elements.backup.files[0];
+      if (!file || file.size > 25 * 1024 * 1024) throw new Error('Choose a Spendbay backup under 25 MB.');
+      const envelope = JSON.parse(await file.text());
+      if (envelope.version !== 1) throw new Error('Unsupported backup version.');
+      const salt = decodeBackup(envelope.salt), iv = decodeBackup(envelope.iv);
+      if (salt.length !== 16 || iv.length !== 12) throw new Error('Invalid backup.');
+      const decrypted = await crypto.subtle.decrypt({name:'AES-GCM', iv}, await backupKey(secret, salt), decodeBackup(envelope.data));
+      const data = JSON.parse(new TextDecoder().decode(decrypted));
+      const currency = currencyHint(data.currency);
+      if (!currency || !validRules(data.merchantRules)) throw new Error('Invalid backup contents.');
+      validateLedger(data.transactions);
+      if (!confirm('Replace the ledger and merchant rules with this backup?')) return;
+      const previous = {transactions, currency:ledgerCurrency, merchantRules, isSampleLedger};
+      commitLedger(data.transactions, currency, data.isSampleLedger === true, false);
+      merchantRules = data.merchantRules;
+      offerUndo(() => {
+        commitLedger(previous.transactions, previous.currency, previous.isSampleLedger, false);
+        merchantRules = previous.merchantRules;
+        renderRules();
+        try { saveRules(); backupStatus.textContent = 'Backup restore undone.'; }
+        catch { backupStatus.textContent = 'Rules could not be saved to this browser.'; }
+      });
+      renderRules();
+      saveRules();
+      backupStatus.textContent = 'Backup restored.';
+    }
+    form.reset();
+  } catch (error) {
+    backupStatus.textContent = error.name === 'OperationError' ? 'Wrong passphrase or damaged backup.' : error.message;
+  } finally {
+    buttons.forEach(button => { button.disabled = false; });
+  }
+};
