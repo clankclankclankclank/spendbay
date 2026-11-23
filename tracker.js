@@ -79,6 +79,10 @@ function renderTrend() {
     months.get(row.month).push(row);
   }
   const trend = [...months].reverse().map(([month, rows]) => [month, totals(rows)]);
+  renderAnimatedGraph(byId('cash-flow-graph'), [
+    {label:'Income', color:'#69c99a', values:trend.map(([, data]) => data.income)},
+    {label:'Expenses', color:'#efa0a0', values:trend.map(([, data]) => data.expenses)}
+  ], format);
   const peak = trend.reduce((max, [, data]) => Math.max(max, data.income, data.expenses), 1);
   byId('trend').replaceChildren(...trend.map(([month, data]) => {
     const item = document.createElement('li');

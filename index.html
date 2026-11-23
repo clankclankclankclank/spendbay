@@ -15,10 +15,12 @@
   </script>
   <link rel="stylesheet" href="tracker.css">
   <script src="csv.js" defer></script>
-  <script src="tracker.js?v=5" defer></script>
+  <script defer src="animated-graph.js"></script>
+  <script src="tracker.js?v=6" defer></script>
   <link rel="stylesheet" href="fuse-button.css">
   <link rel="stylesheet" href="stepper.css">
   <script defer src="stepper.js"></script>
+  <style>.animated-graph { display:block; width:100%; height:clamp(9rem,27vw,16rem); margin:.6rem 0 1rem; } .animated-graph[hidden] { display:none; }</style>
   <script defer src="directional-cursor.js"></script>
 </head>
 <body>
@@ -136,7 +138,7 @@
         </section>
       </section>
       <div class="breakdowns">
-        <section class="section-rule"><h2>Monthly cash flow</h2><p class="legend"><span>Income</span><span>Expenses</span></p><div class="trend-scroll"><ul id="trend" class="trend"></ul></div></section>
+        <section class="section-rule"><h2>Monthly cash flow</h2><p class="legend"><span>Income</span><span>Expenses</span></p><canvas id="cash-flow-graph" class="animated-graph" role="img"></canvas><details><summary>Monthly values</summary><div class="trend-scroll"><ul id="trend" class="trend"></ul></div></details></section>
         <section class="section-rule"><h2>Spending by category</h2><div id="spending-wheel" class="spending-wheel" aria-hidden="true"></div><ul id="categories" class="bars"></ul></section>
       </div>
       <section class="section-rule">
