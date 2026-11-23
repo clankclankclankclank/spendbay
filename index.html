@@ -14,7 +14,7 @@
   </script>
   <link rel="stylesheet" href="tracker.css">
   <script src="csv.js" defer></script>
-  <script src="tracker.js" defer></script>
+  <script src="tracker.js?v=3" defer></script>
 </head>
 <body>
   <main>
@@ -102,6 +102,18 @@
         <div><dt>Largest expense</dt><dd id="largest-expense"></dd></div>
         <div><dt>Top spending category</dt><dd id="top-category"></dd></div>
       </dl>
+      <section class="section-rule" aria-labelledby="review-title">
+        <h2 id="review-title">Monthly review</h2>
+        <p class="format" id="review-period"></p>
+        <div class="breakdowns">
+          <div><h3>Category changes</h3><ul class="bars" id="review-changes"></ul></div>
+          <div><h3>Possible recurring expenses</h3><ul class="bars" id="review-recurring"></ul></div>
+        </div>
+        <section id="review-detail" hidden aria-live="polite">
+          <h3 id="review-detail-title"></h3>
+          <div class="table-scroll"><table><thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead><tbody id="review-transactions"></tbody></table></div>
+        </section>
+      </section>
       <div class="breakdowns">
         <section class="section-rule"><h2>Monthly cash flow</h2><p class="legend"><span>Income</span><span>Expenses</span></p><div class="trend-scroll"><ul id="trend" class="trend"></ul></div></section>
         <section class="section-rule"><h2>Spending by category</h2><div id="spending-wheel" class="spending-wheel" aria-hidden="true"></div><ul id="categories" class="bars"></ul></section>

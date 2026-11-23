@@ -1,18 +1,14 @@
 const samples = {
   "sample.csv": {
-    "name": "Business owner",
     "csv": "date,description,category,amount,currency\n2026-09-02,Online orders payout,Sales,42850,INR\n2026-09-04,Packaging supplier,Operations,-3715,INR\n2026-09-18,Product photography,Marketing,-5400,INR\n2026-10-02,Wholesale order,Sales,29300,INR\n2026-10-09,Inventory restock,Inventory,-18540,INR\n2026-10-21,Courier invoices,Shipping,-2690,INR\n2026-11-05,Online orders payout,Sales,56200,INR\n2026-11-09,Workspace rent,Housing,-9500,INR\n"
   },
   "sample-bank.csv": {
-    "name": "College student",
     "csv": "Statement for sample student account\nTransaction Date,Narration,Withdrawal Amt.,Deposit Amt.,Balance\n01/09/2026,Monthly allowance,,₹7500,₹7500\n04/09/2026,Hostel mess top-up,₹1800,,₹5700\n13/09/2026,Lab supplies,₹385,,₹5315\n26/09/2026,Train home,₹430,,₹4885\n02/10/2026,Monthly allowance,,₹7500,₹12385\n13/10/2026,Supermarket,₹690.50,,₹11694.50\n03/11/2026,Internet bill,₹299,,₹11395.50\n"
   },
   "sample-wallet.csv": {
-    "name": "Salaried employee",
-    "csv": "Posted Date;Merchant;Label;Transaction Type;Transaction Amount;Currency\n2026/09/25;September salary;Salary;Credit;2720;GBP\n2026/10/01;Flat rent;Housing;Debit;1090;GBP\n2026/10/08;Rail pass;Transport;Debit;146.20;GBP\n2026/10/17;Supermarket;Groceries;Debit;83.65;GBP\n2026/10/26;October salary;Salary;Credit;2720;GBP\n2026/11/01;Flat rent;Housing;Debit;1090;GBP\n2026/11/13;Electricity and gas;Utilities;Debit;102.40;GBP\n"
+    "csv": "Posted Date;Merchant;Label;Transaction Type;Transaction Amount;Currency\n2026/09/25;September salary;Salary;Credit;2720;USD\n2026/10/01;Flat rent;Housing;Debit;1090;USD\n2026/10/08;Rail pass;Transport;Debit;146.20;USD\n2026/10/17;Supermarket;Groceries;Debit;83.65;USD\n2026/10/26;October salary;Salary;Credit;2720;USD\n2026/11/01;Flat rent;Housing;Debit;1090;USD\n2026/11/13;Electricity and gas;Utilities;Debit;102.40;USD\n"
   },
   "sample-investor.csv": {
-    "name": "Investor losses",
     "csv": "Date|Details|Category|Amount (USD)\n2026-09-09|Realized gain on ETF sale|Realized gain|$245.00\n2026-09-19|Closed semiconductor position|Realized loss|-$820.45\n2026-10-04|Broker exchange fees|Fees|-$26.50\n2026-10-17|Dividend payment|Dividends|$52.60\n2026-11-03|Closed small-cap position|Realized loss|-$1430.20\n2026-11-12|Market data subscription|Fees|-$19.00\n"
   }
 };
@@ -198,6 +194,79 @@ function renderTotal(element, amount, animate) {
   requestAnimationFrame(tick);
 }
 
+function previousMonth(month) {
+  const date = new Date(month + '-01T00:00:00Z');
+  date.setUTCMonth(date.getUTCMonth() - 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function renderMonthlyReview() {
+  const month = byId('month').value || transactions.reduce((latest, row) => row.month > latest ? row.month : latest, '');
+  const changes = byId('review-changes');
+  const recurring = byId('review-recurring');
+  changes.replaceChildren();
+  recurring.replaceChildren();
+  byId('review-detail').hidden = true;
+  if (!month) return;
+
+  const prior = previousMonth(month);
+  const hasPrior = transactions.some(row => row.month === prior);
+  byId('review-period').textContent = monthLabel(month) + (hasPrior
+    ? ' compared with ' + monthLabel(prior)
+    : ' · No transactions for ' + monthLabel(prior) + ' to compare.');
+  const categories = new Map();
+  const merchants = new Map();
+  for (const row of transactions) {
+    if (row.amount >= 0 || ![month, prior].includes(row.month)) continue;
+    const merchant = row.description.trim().toLowerCase().replace(/\s+/g, ' ');
+    for (const [groups, key] of [[categories, row.category], [merchants, merchant]]) {
+      if (!groups.has(key)) groups.set(key, {now: [], before: []});
+      groups.get(key)[row.month === month ? 'now' : 'before'].push(row);
+    }
+  }
+
+  function add(list, name, detail, rows) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = name;
+    button.onclick = () => {
+      byId('review-detail-title').textContent = name + ' transactions';
+      const table = byId('review-transactions');
+      table.replaceChildren();
+      for (const row of [...rows].sort((a, b) => b.date.localeCompare(a.date))) {
+        const line = table.insertRow();
+        for (const value of [row.date, row.description, format(row.amount)]) line.insertCell().textContent = value;
+      }
+      byId('review-detail').hidden = false;
+    };
+    item.append(button, document.createTextNode(' · ' + detail));
+    list.append(item);
+  }
+  const spending = rows => rows.reduce((sum, row) => sum - row.amount, 0);
+  const delta = (now, before) => now === before ? 'same as prior month'
+    : format(Math.abs(now - before)) + (now > before ? ' more' : ' less');
+  const ranked = [...categories].sort(([,a], [,b]) =>
+    Math.abs(spending(b.now) - spending(b.before)) - Math.abs(spending(a.now) - spending(a.before)));
+  for (const [category, {now, before}] of ranked) {
+    const amount = spending(now);
+    add(changes, category, format(amount) + (hasPrior ? ' · ' + delta(amount, spending(before)) : ''), [...now, ...before]);
+  }
+  for (const {now, before} of merchants.values()) {
+    if (now.length !== 1 || before.length !== 1) continue;
+    const interval = (Date.parse(now[0].date) - Date.parse(before[0].date)) / 86400000;
+    if (interval < 25 || interval > 35) continue;
+    const amount = spending(now);
+    add(recurring, now[0].description, format(amount) + ' · ' + delta(amount, spending(before)), [...now, ...before]);
+  }
+  for (const [list, message] of [[changes, 'No expenses in this review period.'], [recurring, 'No matching monthly charges across these two months.']]) {
+    if (list.children.length) continue;
+    const item = document.createElement('li');
+    item.textContent = message;
+    list.append(item);
+  }
+}
+
 function renderMonth(animate = false) {
   const rows = selectedRows();
   const summary = totals(rows);
@@ -211,6 +280,7 @@ function renderMonth(animate = false) {
   const categories = [...spending].sort((a, b) => b[1] - a[1]);
   renderSpending(categories, summary.expenses);
   renderInsights(rows, summary, categories);
+  renderMonthlyReview();
   for (const button of byId('trend').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.month === byId('month').value));
   }
@@ -218,7 +288,7 @@ function renderMonth(animate = false) {
   renderTransactions(rows);
 }
 
-async function load(read, name, sample = false, layout) {
+async function load(read, sample = false, layout) {
   const version = ++loadVersion;
   activeImport = version;
   const progress = byId('import-progress');
@@ -226,6 +296,7 @@ async function load(read, name, sample = false, layout) {
   byId('import-phase').textContent = 'Reading CSV…';
   const status = byId('status');
   status.removeAttribute('data-error');
+  status.textContent = '';
   try {
     const source = await read();
     if (version !== loadVersion) return;
@@ -243,9 +314,7 @@ async function load(read, name, sample = false, layout) {
     selectedCategory = '';
     if (replace) byId('month').value = '';
     commitLedger(next, imported.currency, sample);
-    status.textContent = name + ' · ' + imported.currency + ' · ' + imported.format + ' · ' + rows.length + ' transactions'
-      + (imported.inferred ? ' · ' + imported.inferred + ' categories suggested' : '')
-      + (imported.assumedDayFirst ? ' · Ambiguous dates read as day/month/year' : '');
+    status.textContent = !sample && imported.assumedDayFirst ? 'Ambiguous dates read as day/month/year.' : '';
   } catch (error) {
     if (version !== loadVersion) return;
     status.setAttribute('data-error', '');
@@ -263,7 +332,7 @@ byId('csv').addEventListener('change', event => {
 for (const button of document.querySelectorAll('[data-sample]')) {
   button.addEventListener('click', () => {
     const sample = samples[button.dataset.sample];
-    load(() => sample.csv, sample.name, true);
+    load(() => sample.csv, true);
   });
 }
 byId('month').addEventListener('change', () => renderMonth());
@@ -569,7 +638,7 @@ async function previewUpload(file) {
     for (const key of Object.keys(mappingLabels)) {
       if (Number.isInteger(saved?.[key]) && saved[key] >= -1 && saved[key] < layout.width) keys[key] = saved[key];
     }
-    pendingImport = {source, name: file.name, layout: {...layout, keys}, signature};
+    pendingImport = {source, layout: {...layout, keys}, signature};
     byId('import-file').textContent = file.name;
     byId('remember-mapping').checked = Boolean(saved);
     const fields = Object.entries(mappingLabels).map(([key, name]) => {
@@ -642,7 +711,7 @@ function renderImportPreview() {
 byId('import-form').addEventListener('submit', event => {
   event.preventDefault();
   if (!pendingImport || byId('confirm-import').disabled) return;
-  const {source, name, layout, signature} = pendingImport;
+  const {source, layout, signature} = pendingImport;
   if (byId('remember-mapping').checked) {
     try {
       const saved = readMappings();
@@ -651,7 +720,7 @@ byId('import-form').addEventListener('submit', event => {
     } catch {}
   }
   byId('import-dialog').close();
-  load(() => source, name, false, layout);
+  load(() => source, false, layout);
 });
 byId('cancel-import').addEventListener('click', () => byId('import-dialog').close());
 byId('import-dialog').addEventListener('close', () => { pendingImport = null; });
